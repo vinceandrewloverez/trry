@@ -1,103 +1,240 @@
-import Image from "next/image";
+'use client';
+
+import { useState, useEffect } from "react";
+import Link from "next/link";
+import { CheckCircle, Clock, AlertCircle, Menu, X } from "lucide-react";
+import curriculum from "@/data/curriculum";
+
+type Course = {
+  courseCode: string;
+  courseTitle: string;
+  units: number;
+  preReqs?: string[];
+  status: 'pending' | 'active' | 'passed';
+};
+
+type CourseData = Record<string, Course[]>;
 
 export default function Home() {
-  return (
-    <div className="grid grid-rows-[20px_1fr_20px] items-center justify-items-center min-h-screen p-8 pb-20 gap-16 sm:p-20 font-[family-name:var(--font-geist-sans)]">
-      <main className="flex flex-col gap-[32px] row-start-2 items-center sm:items-start">
-        <Image
-          className="dark:invert"
-          src="/next.svg"
-          alt="Next.js logo"
-          width={180}
-          height={38}
-          priority
-        />
-        <ol className="list-inside list-decimal text-sm/6 text-center sm:text-left font-[family-name:var(--font-geist-mono)]">
-          <li className="mb-2 tracking-[-.01em]">
-            Get started by editing{" "}
-            <code className="bg-black/[.05] dark:bg-white/[.06] px-1 py-0.5 rounded font-[family-name:var(--font-geist-mono)] font-semibold">
-              src/app/page.tsx
-            </code>
-            .
-          </li>
-          <li className="tracking-[-.01em]">
-            Save and see your changes instantly.
-          </li>
-        </ol>
+  const [statusFilter, setStatusFilter] = useState("all");
+  const [editableData, setEditableData] = useState<CourseData>({});
+  const [showScroll, setShowScroll] = useState(false);
+  const [isOpen, setIsOpen] = useState(false);
+  const [expandedSections, setExpandedSections] = useState<Record<string, boolean>>({});
 
-        <div className="flex gap-4 items-center flex-col sm:flex-row">
-          <a
-            className="rounded-full border border-solid border-transparent transition-colors flex items-center justify-center bg-foreground text-background gap-2 hover:bg-[#383838] dark:hover:bg-[#ccc] font-medium text-sm sm:text-base h-10 sm:h-12 px-4 sm:px-5 sm:w-auto"
-            href="https://vercel.com/new?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            <Image
-              className="dark:invert"
-              src="/vercel.svg"
-              alt="Vercel logomark"
-              width={20}
-              height={20}
-            />
-            Deploy now
-          </a>
-          <a
-            className="rounded-full border border-solid border-black/[.08] dark:border-white/[.145] transition-colors flex items-center justify-center hover:bg-[#f2f2f2] dark:hover:bg-[#1a1a1a] hover:border-transparent font-medium text-sm sm:text-base h-10 sm:h-12 px-4 sm:px-5 w-full sm:w-auto md:w-[158px]"
-            href="https://nextjs.org/docs?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            Read our docs
-          </a>
+  useEffect(() => {
+    const onScroll = () => setShowScroll(window.scrollY > 300);
+    window.addEventListener("scroll", onScroll);
+    return () => window.removeEventListener("scroll", onScroll);
+  }, []);
+
+  useEffect(() => {
+    if (typeof window !== "undefined") {
+      const allCourses = Object.values(curriculum).flatMap(year =>
+        Object.values(year).flat()
+      );
+      const total = allCourses.reduce((sum, c) => sum + (c.units || 0), 0);
+      console.log("✅ Curriculum Total Units:", total);
+    }
+
+    const storedData = localStorage.getItem("courseStatus");
+
+    const initialExpandedSections: Record<string, boolean> = {};
+    const initialData: CourseData = {};
+
+    Object.entries(curriculum).forEach(([year, terms]) => {
+      Object.entries(terms).forEach(([term, courses]) => {
+        const key = `${year} - ${term}`;
+        initialData[key] = courses.map((course) => ({
+          ...course,
+          status: "pending",
+        }));
+        initialExpandedSections[key] = true;
+      });
+    });
+
+    if (storedData) {
+      setEditableData(JSON.parse(storedData));
+    } else {
+      setEditableData(initialData);
+      localStorage.setItem("courseStatus", JSON.stringify(initialData));
+    }
+
+    setExpandedSections(initialExpandedSections);
+  }, []);
+
+  const updateStatus = (yearTerm: string, index: number, newStatus: 'pending' | 'active' | 'passed') => {
+    setEditableData(prev => {
+      const updated = { ...prev };
+      updated[yearTerm][index].status = newStatus;
+      localStorage.setItem("courseStatus", JSON.stringify(updated));
+      return updated;
+    });
+  };
+
+  const toggleSection = (yearTerm: string) => {
+    setExpandedSections(prev => ({
+      ...prev,
+      [yearTerm]: !prev[yearTerm],
+    }));
+  };
+
+  const allCourses = Object.values(editableData).flat();
+  const passedCourses = allCourses.filter(course => course.status === "passed").length;
+  const progressPercent = allCourses.length > 0 ? Math.round((passedCourses / allCourses.length) * 100) : 0;
+  const totalUnits = allCourses.reduce((sum, course) => sum + (course.units || 0), 0);
+  const passedUnits = allCourses
+    .filter(course => course.status === "passed")
+    .reduce((sum, course) => sum + (course.units || 0), 0);
+
+  return (
+    <>
+      {/* Navbar */}
+      <nav className="dark:bg-white/5 backdrop-blur-md border border-white/20 dark:border-white/10 rounded-3xl p-4 mb-10">
+        <div className="max-w-8xl mx-auto flex justify-between items-center">
+          <Link href="/" className="text-4xl font-extrabold bg-gradient-to-r from-indigo-500 to-pink-500 bg-clip-text text-transparent">
+            Strategix
+          </Link>
+
+          <button className="md:hidden text-gray-700 dark:text-gray-300" onClick={() => setIsOpen(!isOpen)}>
+            {isOpen ? <X size={28} /> : <Menu size={28} />}
+          </button>
+
+          <div className="hidden md:flex space-x-6 text-xl">
+            <Link href="/" className="text-gray-700 dark:text-gray-300 hover:text-blue-600 dark:hover:text-blue-300">Home</Link>
+            <Link href="/coursetracker" className="text-gray-700 dark:text-gray-300 hover:text-blue-600 dark:hover:text-blue-300">Course Tracker</Link>
+            <Link href="/schedule-maker" className="text-gray-700 dark:text-gray-300 hover:text-blue-600 dark:hover:text-blue-300">Schedule Maker</Link>
+            <Link href="/about" className="text-gray-700 dark:text-gray-300 hover:text-blue-600 dark:hover:text-blue-300">About</Link>
+          </div>
         </div>
-      </main>
-      <footer className="row-start-3 flex gap-[24px] flex-wrap items-center justify-center">
-        <a
-          className="flex items-center gap-2 hover:underline hover:underline-offset-4"
-          href="https://nextjs.org/learn?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-          target="_blank"
-          rel="noopener noreferrer"
+
+        {isOpen && (
+          <div className="mt-4 flex flex-col space-y-2 md:hidden text-lg">
+            <Link href="/" className="text-gray-700 dark:text-gray-300 hover:text-blue-600 dark:hover:text-blue-300">Home</Link>
+            <Link href="/coursetracker" className="text-gray-700 dark:text-gray-300 hover:text-blue-600 dark:hover:text-blue-300">Course Tracker</Link>
+            <Link href="/schedule-maker" className="text-gray-700 dark:text-gray-300 hover:text-blue-600 dark:hover:text-blue-300">Schedule Maker</Link>
+            <Link href="/about" className="text-gray-700 dark:text-gray-300 hover:text-blue-600 dark:hover:text-blue-300">About</Link>
+          </div>
+        )}
+      </nav>
+
+      {/* Main Section */}
+      <div className="max-w-5xl mx-auto p-4 relative">
+        <h1 className="text-4xl font-bold text-center mb-6 text-blue-600 dark:text-blue-300">📚 Course Tracker</h1>
+
+        {/* Filter */}
+        <div className="flex justify-center gap-4 mb-8">
+          {["all", "passed", "active", "pending"].map((status) => (
+            <button
+              key={status}
+              onClick={() => setStatusFilter(status)}
+              className={`px-4 py-2 rounded-lg border ${statusFilter === status ? "bg-blue-500 text-white" : "bg-white dark:bg-gray-800 text-gray-700 dark:text-gray-300"}`}
+            >
+              {status.charAt(0).toUpperCase() + status.slice(1)}
+            </button>
+          ))}
+        </div>
+
+        {/* Progress Bar */}
+        <div className="mb-6">
+          <h2 className="text-xl font-semibold text-center mb-2">Progress</h2>
+          <div className="w-full bg-gray-200 dark:bg-gray-700 rounded-full h-6 overflow-hidden mb-2 relative">
+            <div
+              className="absolute top-0 left-0 h-full text-white text-sm font-medium text-center p-1 leading-none rounded-full transition-all duration-500 bg-gradient-to-r from-green-400 via-blue-500 to-purple-600"
+              style={{ width: `${progressPercent}%` }}
+            >
+              {progressPercent}%
+            </div>
+          </div>
+          <p className="text-center text-gray-700 dark:text-gray-300 text-sm">
+            {passedUnits} / {totalUnits} units passed
+          </p>
+        </div>
+
+        {/* Course Sections */}
+        {Object.entries(editableData).map(([yearTerm, courses]) => {
+          const isExpanded = expandedSections[yearTerm] ?? true;
+          const areAllPassed = courses.every(course => course.status === 'passed');
+
+          return (
+            <div key={yearTerm} className="mb-6 rounded-xl border border-gray-300 dark:border-gray-700 overflow-hidden shadow-md">
+              <div
+                onClick={() => toggleSection(yearTerm)}
+                className="w-full flex items-center justify-between px-6 py-4 bg-white dark:bg-gray-800 hover:bg-gray-200 dark:hover:bg-gray-700 text-lg font-semibold text-indigo-600 dark:text-indigo-300 cursor-pointer"
+              >
+                <span>{yearTerm.replace(/([A-Za-z]+)(\d+)/g, "$1 $2")}</span>
+                <span className="transform transition-transform duration-300">
+                  {isExpanded ? "-" : "+"}
+                </span>
+              </div>
+
+              <div className={`transition-all duration-500 overflow-hidden bg-white dark:bg-gray-900 px-6 ${isExpanded ? "py-6" : "max-h-0"}`}>
+
+                <div className="flex justify-end mb-4">
+                  <button
+                    onClick={() => {
+                      const newStatus = areAllPassed ? "pending" : "passed";
+                      setEditableData(prev => {
+                        const updated = { ...prev };
+                        updated[yearTerm] = updated[yearTerm].map(course => ({ ...course, status: newStatus }));
+                        localStorage.setItem("courseStatus", JSON.stringify(updated));
+                        return updated;
+                      });
+                    }}
+                    className="px-4 py-2 rounded-lg bg-blue-500 text-white hover:bg-blue-600 transition-colors"
+                  >
+                    {areAllPassed ? 'Unmark All as Passed' : 'Mark All as Passed'}
+                  </button>
+                </div>
+
+                <div className="grid md:grid-cols-2 gap-4">
+                  {courses
+                    .filter(course => statusFilter === "all" || course.status === statusFilter)
+                    .map((course, idx) => (
+                      <div key={idx} className="bg-white dark:bg-gray-800 p-5 rounded-2xl border border-gray-200 dark:border-gray-700 shadow-sm hover:shadow-md transition-shadow">
+                        <div className="flex justify-between mb-4">
+                          <h3 className="text-lg font-semibold text-blue-600 dark:text-blue-300">{course.courseTitle}</h3>
+                          <span className="text-sm text-gray-500 dark:text-gray-400">
+                            {typeof course.units === 'number' ? `${course.units} unit${course.units === 1 ? '' : 's'}` : 'N/A'}
+                          </span>
+
+                        </div>
+                        <div className="flex gap-2 flex-wrap">
+                          {["pending", "active", "passed"].map((status) => (
+                            <button
+                              key={status}
+                              onClick={() => updateStatus(yearTerm, idx, status as 'pending' | 'active' | 'passed')}
+                              className={`px-4 py-2 rounded-lg border ${course.status === status
+                                  ? status === "passed"
+                                    ? "bg-green-500 text-white"
+                                    : status === "active"
+                                      ? "bg-yellow-500 text-white"
+                                      : "bg-blue-500 text-white"
+                                  : "bg-white dark:bg-gray-800 text-gray-700 dark:text-gray-300"
+                                }`}
+                            >
+                              {status.charAt(0).toUpperCase() + status.slice(1)}
+                            </button>
+                          ))}
+                        </div>
+                      </div>
+                    ))}
+                </div>
+              </div>
+            </div>
+          );
+        })}
+      </div>
+
+      {/* Scroll To Top */}
+      {showScroll && (
+        <button
+          onClick={() => window.scrollTo({ top: 0, behavior: "smooth" })}
+          className="fixed bottom-10 right-10 p-3 bg-blue-600 text-white rounded-full shadow-lg"
         >
-          <Image
-            aria-hidden
-            src="/file.svg"
-            alt="File icon"
-            width={16}
-            height={16}
-          />
-          Learn
-        </a>
-        <a
-          className="flex items-center gap-2 hover:underline hover:underline-offset-4"
-          href="https://vercel.com/templates?framework=next.js&utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-          target="_blank"
-          rel="noopener noreferrer"
-        >
-          <Image
-            aria-hidden
-            src="/window.svg"
-            alt="Window icon"
-            width={16}
-            height={16}
-          />
-          Examples
-        </a>
-        <a
-          className="flex items-center gap-2 hover:underline hover:underline-offset-4"
-          href="https://nextjs.org?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-          target="_blank"
-          rel="noopener noreferrer"
-        >
-          <Image
-            aria-hidden
-            src="/globe.svg"
-            alt="Globe icon"
-            width={16}
-            height={16}
-          />
-          Go to nextjs.org →
-        </a>
-      </footer>
-    </div>
+          ↑
+        </button>
+      )}
+    </>
   );
 }
